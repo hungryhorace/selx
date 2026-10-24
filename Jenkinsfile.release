@@ -115,6 +115,9 @@ pipeline {
                         cat sums/*.sha256 > sums/SHA256SUMS
                         cat sums/SHA256SUMS
                         gh release upload "$REL_TAG" sums/SHA256SUMS --clobber
+                        # The crates stages share this workspace, and `cargo
+                        # publish` refuses a tree with untracked files in it.
+                        rm -rf sums
                     '''
                 }
             }
