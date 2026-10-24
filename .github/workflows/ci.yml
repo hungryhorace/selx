@@ -1,0 +1,89 @@
+# `just test` on pushes and pull requests, so they get a tick without the
+# maintainer's Jenkins. The justfile is the single definition of what CI
+# runs; this file and the Jenkinsfile only call it. The Jenkinsfile stays
+# the CI of record: it runs the same recipe natively on amd64 and aarch64
+# Linux and on Apple Silicon, which GitHub's free runners do not offer in
+# that form. Not here: the docker dogfood harness and the smoke scripts in
+# scripts/, which need real Helix, lazygit and herdr and a Claude login.
+#
+# Pins, kept in step with the Jenkinsfile: just 1.58.0 and cargo-deny
+# 0.20.2, fetched as release binaries and verified by hash, so a run uses
+# the exact versions Jenkins installs. The MSRV job checks the
+# `rust-version` in Cargo.toml, which nothing else does.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # macos-latest is Apple Silicon; the Linux binaries are static
+          # musl builds. The hashes are the ones the projects publish
+          # (just's SHA256SUMS, cargo-deny's .sha256 files).
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            just_sha256: 4a5cc2f53e6f0f8c59092a6cc38291eb729d46a7dd95d3ae582008881b84931d
+            deny_sha256: 9f12ed4c49936e09b48bf862b595cde2fe64fcbd9d74dfacac6131ca824c8d5f
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            just_sha256: 50ae3e996c974a0bf32ea7d10f495070df33f1b43e0616b2769e3d4821ed8f48
+            deny_sha256: fe67d82a10d8597a3549364cb733a3f9cc1bfff9031b7ae46384a9f2a72090c3
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      # just and cargo-deny, at the Jenkinsfile's versions. `shasum` rather
+      # than `sha256sum`, which macOS does not ship.
+      - name: Tools
+        run: |
+          set -eu
+          bin="$HOME/.local/bin"
+          mkdir -p "$bin"
+          curl -sSL -o /tmp/just.tgz \
+            "https://github.com/casey/just/releases/download/1.58.0/just-1.58.0-${{ matrix.target }}.tar.gz"
+          echo "${{ matrix.just_sha256 }}  /tmp/just.tgz" | shasum -a 256 -c -
+          tar -xzf /tmp/just.tgz -C "$bin" just
+          deny=cargo-deny-0.20.2-${{ matrix.target }}
+          curl -sSL -o /tmp/deny.tgz \
+            "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/$deny.tar.gz"
+          echo "${{ matrix.deny_sha256 }}  /tmp/deny.tgz" | shasum -a 256 -c -
+          tar -xzf /tmp/deny.tgz -C /tmp "$deny/cargo-deny"
+          mv "/tmp/$deny/cargo-deny" "$bin/"
+          echo "$bin" >> "$GITHUB_PATH"
+
+      - name: Versions
+        run: rustc --version && cargo --version && just --version && cargo deny --version
+
+      - name: just test
+        run: just test
+
+  # The branch name is the toolchain. `cargo check` only: the floor has to
+  # compile every target, and the stable job already tests it.
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.85
+      - run: cargo check --locked --all-targets

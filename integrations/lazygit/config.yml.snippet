@@ -1,0 +1,63 @@
+# selx — lazygit config. Merge into ~/.config/lazygit/config.yml.
+# Written for lazygit 0.64.1; keys checked against its keybindings doc.
+# Paths lazygit hands over are repo-relative and lazygit runs at the repo
+# root, so `selx send` resolves them correctly.
+#
+# Defaults are *ambient* (like VS Code's selection sharing): agents may use
+# the selection as context, nothing is typed anywhere. 'T' is the explicit
+# variant — an @-mention in Claude, typed into a herdr agent pane (ambient
+# events are never injected into panes). t/T matches the Helix snippet:
+# one "tell the agent" key everywhere, shifted when you mean it loudly.
+# selx send exits instantly: skip the "press enter to return to lazygit"
+# screen after it runs. (Also skips it after real editor sessions started
+# from lazygit; delete this line if you want that pause back.)
+promptToReturnFromSubprocess: false
+os:
+  # 'helix (hx)' invokes the binary as `hx`, which every helix install
+  # provides; the plain 'helix' preset invokes `helix`, which only some
+  # (e.g. snap) do. Preset names are defined in lazygit's editor_presets.go.
+  editPreset: 'helix (hx)'
+  # 'e' in the files panel: hand the file to the Helix already running in
+  # this herdr workspace instead of stacking a second Helix on top of
+  # lazygit. `selx open` execs a plain `hx` whenever it cannot deliver —
+  # no Helix pane, no herdr — so the preset above still describes what you
+  # get then.
+  edit: 'selx open {{filename}}'
+  # 'e' in the staging/diff view: share the line under the cursor as
+  # ambient context instead of opening the editor there. One line only —
+  # lazygit has no placeholder for a multi-line diff selection (upstream
+  # limitation). Drop this override to keep 'e' opening your editor.
+  editAtLine: 'selx send --file {{filename}} --start {{line}} --end {{line}} --source lazygit'
+customCommands:
+  # 't' in the files panel: share the selected entry as ambient context.
+  # No line range — the whole file is meant. t/T are free in this panel
+  # (they mean revert/tag only in the commits panel, untouched here).
+  #
+  # SelectedPath, not SelectedFile.Name: lazygit renders the files panel as
+  # a tree, and on a directory row (or an empty panel) SelectedFile is nil,
+  # which blows the template up with a nil-pointer error instead of running
+  # anything. SelectedPath is the string lazygit shows on the row — the
+  # file, or the directory when the cursor is on a collapsed folder — and a
+  # directory is a perfectly good thing to hand an agent as context.
+  # The {{if}} makes an empty panel a no-op: with no selection the path
+  # is "", and `selx send --file ""` would pop up an argument error.
+  - key: 't'
+    context: 'files'
+    command: '{{if .SelectedPath}}selx send --file {{.SelectedPath | quote}} --source lazygit{{end}}'
+    description: 'Share selected file with agent (ambient)'
+  # 'T': explicitly send the selection — Claude renders it as a bare
+  # @-mention with no line suffix.
+  - key: 'T'
+    context: 'files'
+    command: '{{if .SelectedPath}}selx send --file {{.SelectedPath | quote}} --explicit --source lazygit{{end}}'
+    description: 'Send selected file to agent'
+  # The commit-files panel (a commit's file list) is a separate context with
+  # its own template values; SelectedPath is empty there.
+  - key: 't'
+    context: 'commitFiles'
+    command: '{{if .SelectedCommitFilePath}}selx send --file {{.SelectedCommitFilePath | quote}} --source lazygit{{end}}'
+    description: 'Share selected file with agent (ambient)'
+  - key: 'T'
+    context: 'commitFiles'
+    command: '{{if .SelectedCommitFilePath}}selx send --file {{.SelectedCommitFilePath | quote}} --explicit --source lazygit{{end}}'
+    description: 'Send selected file to agent'

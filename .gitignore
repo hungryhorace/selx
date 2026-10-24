@@ -1,0 +1,6 @@
+/target
+/dist/
+.env
+*.log
+docker/stage/
+__pycache__/

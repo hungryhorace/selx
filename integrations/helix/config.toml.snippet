@@ -1,0 +1,31 @@
+# selx — Helix keybindings. Merge into ~/.config/helix/config.toml.
+#
+# Verified against Helix 25.07.1: %{buffer_name} expands to the buffer's
+# cwd-relative path, and %{selection_line_start} / %{selection_line_end} to
+# the 1-based inclusive line span of the primary selection — exactly selx's
+# convention. They work in normal mode too (Helix always has a selection),
+# so one binding covers "cursor line" and "selected lines". Helix releases
+# without command expansions (24.x) fail loudly with "unknown variable".
+#
+# <space>t / <space>T are unbound in default Helix (25.07.1), and t/T is
+# also what the lazygit snippet uses — one "tell the agent" key everywhere.
+#
+# For `selx claude` to reload Helix after Claude edits a file, also set this
+# in your existing [editor] section (not added here: a second [editor]
+# table would make the file invalid). The bufferline is where Helix marks
+# modified buffers [+], and selx only types `:reload-all` — which discards
+# unsaved changes — when it can see every buffer there and none is marked.
+#
+#   [editor]
+#   bufferline = "always"
+
+[keys.normal.space]
+# Quiet ambient sync of the selected lines (or the cursor line): agents
+# may use it as context, nothing is injected.
+t = ":sh selx send --file %{buffer_name} --start %{selection_line_start} --end %{selection_line_end} --source helix"
+# Send them as an explicit mention.
+T = ":sh selx send --file %{buffer_name} --start %{selection_line_start} --end %{selection_line_end} --explicit --source helix"
+
+[keys.select.space]
+t = ":sh selx send --file %{buffer_name} --start %{selection_line_start} --end %{selection_line_end} --source helix"
+T = ":sh selx send --file %{buffer_name} --start %{selection_line_start} --end %{selection_line_end} --explicit --source helix"

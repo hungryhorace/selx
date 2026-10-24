@@ -1,0 +1,7 @@
+# stdout can be a closed pipe (`selx status | head`), and Rust reports that
+# as an EPIPE that `println!` can only turn into a panic. crate::outln!
+# handles it — see src/out.rs.
+disallowed-macros = [
+    { path = "std::println", reason = "use crate::outln! — stdout may be a closed pipe" },
+    { path = "std::print", reason = "use crate::outln! — stdout may be a closed pipe" },
+]

@@ -1,0 +1,21 @@
+# Dependency licence policy for `cargo deny check licenses`, which `just
+# test` runs. selx is Apache-2.0 (see LICENSE); every crate in Cargo.lock
+# has to be usable under one of the licences below, or the build fails
+# until someone has read the new crate's licence and added it here.
+#
+# Only licences the tree needs today are listed. A crate licensed
+# `A OR B` passes if either side is allowed, so permissive OR-clauses that
+# also offer a copyleft licence need nothing extra.
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "Unicode-3.0",
+    "Unlicense",
+    # option-ext (via `directories`) is MPL-2.0 only: file-level copyleft
+    # that applies to that crate's own files and does not reach selx.
+    "MPL-2.0",
+]
