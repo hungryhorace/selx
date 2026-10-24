@@ -17,13 +17,13 @@
 // first wins, the others' create is a no-op, and each uploads its own
 // files with --clobber. Nothing here deletes a release or an asset, so a
 // re-run (the RELEASE_TAG parameter) refreshes the assets in place. The
-// crate goes to crates.io last, from the amd64 agent, unless
-// PUBLISH_CRATES is off, when `cargo publish --dry-run` stands in: a
-// crates.io version can never be replaced, so a re-run that only refreshes
-// the tarballs must not try. (On a job's very first build Jenkins has not
-// yet registered the parameters, so PUBLISH_CRATES reads as unset and the
-// dry run is what happens; that is the intended first run, on a tag
-// pushed while the repository is still private.)
+// crate goes to crates.io last, from the amd64 agent, and only when both
+// PUBLISH_CRATES is on and the repository is public; otherwise `cargo
+// publish --dry-run` stands in. A crates.io version can never be
+// replaced, so a re-run that only refreshes the tarballs must not try
+// (PUBLISH_CRATES off), and a crate must not be published while the
+// repository its page links to is private (the visibility check), which
+// is how a release pipeline is proven before the repository goes public.
 pipeline {
     agent none
 
@@ -122,15 +122,40 @@ pipeline {
         // The crate, from the same tested tree, after the tarballs are up:
         // a crates.io failure leaves a complete GitHub Release behind and is
         // fixed by a re-run. `--locked`: the lock file is part of the tree.
+        // First the repository's visibility, which decides between the two
+        // stages that follow; it is read into the environment here because
+        // `when` cannot run a shell step of its own.
+        stage('Crates (check)') {
+            agent { label 'amd64' }
+            steps {
+                withCredentials([string(credentialsId: 'selx-release-token', variable: 'GH_TOKEN')]) {
+                    script {
+                        env.REPO_VISIBILITY = sh(returnStdout: true,
+                            script: 'gh api "repos/$GH_REPO" --jq .visibility').trim()
+                    }
+                }
+                sh 'echo "repository is $REPO_VISIBILITY; PUBLISH_CRATES=$PUBLISH_CRATES"'
+            }
+        }
         stage('Crates (dry run)') {
-            when { expression { !params.PUBLISH_CRATES } }
+            when {
+                not { allOf {
+                    expression { params.PUBLISH_CRATES }
+                    environment name: 'REPO_VISIBILITY', value: 'public'
+                } }
+            }
             agent { label 'amd64' }
             steps {
                 sh 'cargo publish --locked --dry-run'
             }
         }
         stage('Crates') {
-            when { expression { params.PUBLISH_CRATES } }
+            when {
+                allOf {
+                    expression { params.PUBLISH_CRATES }
+                    environment name: 'REPO_VISIBILITY', value: 'public'
+                }
+            }
             agent { label 'amd64' }
             steps {
                 withCredentials([string(credentialsId: 'selx-crates-token', variable: 'CARGO_REGISTRY_TOKEN')]) {
